@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from fastapi.responses import PlainTextResponse, HTMLResponse
 from pydantic import BaseModel
 from prometheus_client import Gauge, generate_latest, CONTENT_TYPE_LATEST
+import random
 
 from driftgate.baseline import DriftMonitor
 
@@ -158,3 +159,22 @@ def dashboard():
 </body>
 </html>"""
     return html
+
+@app.on_event("startup")
+def seed_demo_data():
+    """Populate demo data on startup so the dashboard is never empty.
+    Controlled by an env var so it can be disabled in real use."""
+    if os.getenv("SEED_DEMO", "true").lower() != "true":
+        return
+
+    # stable feature: live matches baseline
+    base1 = [random.gauss(100, 20) for _ in range(2000)]
+    monitor.set_baseline("transaction_amount", base1)
+    for _ in range(300):
+        monitor.observe("transaction_amount", random.gauss(100, 20))
+
+    # drifting feature: live shifted from baseline
+    base2 = [random.gauss(35, 8) for _ in range(2000)]
+    monitor.set_baseline("user_age", base2)
+    for _ in range(300):
+        monitor.observe("user_age", random.gauss(48, 8))  # shifted!
